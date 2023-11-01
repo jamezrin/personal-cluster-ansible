@@ -38,6 +38,7 @@
       ansible.builtin.command:
         argv:
           - '{{ install_script.path }}'
+          - server
           - --flannel-iface={{ default_if_name }}
           - --node-external-ip={{ public_inet_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
@@ -93,12 +94,12 @@
       ansible.builtin.command:
         argv:
           - '{{ install_script.path }}'
+          - agent
           - --server=https://{{ first_master_server_ip }}:6443
           - --token={{ first_master_token | quote }}
           - --flannel-iface={{ default_if_name }}
           - --node-external-ip={{ public_inet_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
-          - --advertise-address={{ default_if_ipv4 }}
 
     - name: Check if a reboot is needed for Debian and Ubuntu boxes
       register: reboot_required_file
