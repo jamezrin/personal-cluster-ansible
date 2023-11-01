@@ -1,14 +1,13 @@
+---
 - name: Prepare nodes
   gather_facts: true
   hosts: cluster
   become: true
   tags:
     - all
+    - prepare
   tasks:
-    - name: Ensure required packages are installed
-      ansible.builtin.apt:
-        pkg:
-          - policycoreutils
+    - import_tasks: tasks/ensure_packages.yml
 
 - name: Update k3s master nodes
   hosts: masters
@@ -20,33 +19,16 @@
     - update-k3s
     - update-k3s-masters
   vars:
+    unit_name: k3s
     reboot_desired: false
   tasks:
-    - name: Update apt-get repo and cache
-      ansible.builtin.apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - import_tasks: tasks/update_system.yml
 
-    - name: Upgrade all apt packages
-      ansible.builtin.apt: upgrade=dist force_apt_get=yes
+    - include_tasks: tasks/obtain_install_script.yml
 
     - name: Get node public IP
       register: public_ip_lookup
       community.general.ipify_facts:
-
-    - name: Create temporary file for k3s install script
-      ansible.builtin.tempfile:
-        prefix: k3s-install-script-
-        suffix: .sh
-      register: install_script
-
-    - name: Set permissions for k3s install script
-      ansible.builtin.file:
-        path: '{{ install_script.path }}'
-        mode: '0740'
-
-    - name: Download k3s install script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: '{{ install_script.path }}'
 
     - name: Execute k3s install script
       vars:
@@ -66,45 +48,10 @@
       register: reboot_required_file
       ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
 
-    - name: Drain current node
-      ansible.builtin.command: /usr/local/bin/kubectl drain {{ inventory_hostname }} --force
+    - include_tasks: tasks/clean_reboot.yml
       when: reboot_required_file.stat.exists or reboot_desired
-      failed_when: false
-
-    - name: Stop k3s service
-      ansible.builtin.systemd:
-        name: k3s
-        state: stopped
-        enabled: false
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Reboot the server
-      ansible.builtin.reboot:
-        msg: 'Reboot initiated by Ansible due to kernel updates'
-        connect_timeout: 5
-        reboot_timeout: 300
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: uptime
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Execute k3s-killall
-      ansible.builtin.command: /usr/local/bin/k3s-killall.sh
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Start k3s service
-      ansible.builtin.systemd:
-        name: k3s
-        state: started
-        enabled: true
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Uncordon current node
-      until: uncordon.rc == 0
-      register: uncordon
-      delay: 5
-      ansible.builtin.command: /usr/local/bin/kubectl uncordon {{ inventory_hostname }}
-      when: reboot_required_file.stat.exists or reboot_desired
+      vars:
+        node_drain_delegate_host: '{{ inventory_hostname }}'
 
 - name: Update k3s workers nodes
   hosts: workers
@@ -112,6 +59,7 @@
   serial: 1
   become: true
   vars:
+    unit_name: k3s-agent
     reboot_desired: false
     first_master_node_name: '{{ groups.masters | first }}'
   tags:
@@ -119,31 +67,13 @@
     - update-k3s
     - update-k3s-workers
   tasks:
-    - name: Update apt-get repo and cache
-      ansible.builtin.apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+    - import_tasks: tasks/update_system.yml
 
-    - name: Upgrade all apt packages
-      ansible.builtin.apt: upgrade=dist force_apt_get=yes
+    - include_tasks: tasks/obtain_install_script.yml
 
     - name: Get node public IP
       register: public_ip_lookup
       community.general.ipify_facts:
-
-    - name: Create temporary file for k3s install script
-      ansible.builtin.tempfile:
-        prefix: k3s-install-script-
-        suffix: .sh
-      register: install_script
-
-    - name: Set permissions for k3s install script
-      ansible.builtin.file:
-        path: '{{ install_script.path }}'
-        mode: '0740'
-
-    - name: Download k3s install script
-      ansible.builtin.get_url:
-        url: https://get.k3s.io
-        dest: '{{ install_script.path }}'
 
     - name: Read first master token
       ansible.builtin.slurp:
@@ -174,46 +104,7 @@
       register: reboot_required_file
       ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
 
-    - name: Drain current node
-      ansible.builtin.command: /usr/local/bin/kubectl drain {{ inventory_hostname }} --force
+    - include_tasks: tasks/clean_reboot.yml
       when: reboot_required_file.stat.exists or reboot_desired
-      delegate_to: '{{ first_master_node_name }}'
-      delegate_facts: false
-      failed_when: false
-
-    - name: Stop k3s-agent service
-      ansible.builtin.systemd:
-        name: k3s-agent
-        state: stopped
-        enabled: false
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Reboot the server
-      ansible.builtin.reboot:
-        msg: 'Reboot initiated by Ansible due to kernel updates'
-        connect_timeout: 5
-        reboot_timeout: 300
-        pre_reboot_delay: 0
-        post_reboot_delay: 30
-        test_command: uptime
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Execute k3s-killall
-      ansible.builtin.command: /usr/local/bin/k3s-killall.sh
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Start k3s service
-      ansible.builtin.systemd:
-        name: k3s-agent
-        state: started
-        enabled: true
-      when: reboot_required_file.stat.exists or reboot_desired
-
-    - name: Uncordon current node
-      until: uncordon.rc == 0
-      register: uncordon
-      delay: 5
-      delegate_to: '{{ first_master_node_name }}'
-      delegate_facts: false
-      ansible.builtin.command: /usr/local/bin/kubectl uncordon {{ inventory_hostname }}
-      when: reboot_required_file.stat.exists or reboot_desired
+      vars:
+        node_drain_delegate_host: '{{ first_master_node_name }}'

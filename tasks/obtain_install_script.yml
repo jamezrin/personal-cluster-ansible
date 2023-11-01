@@ -1,0 +1,16 @@
+---
+- name: Create temporary file for k3s install script
+  ansible.builtin.tempfile:
+    prefix: k3s-install-script-
+    suffix: .sh
+  register: install_script
+
+- name: Set permissions for k3s install script
+  ansible.builtin.file:
+    path: '{{ install_script.path }}'
+    mode: '0740'
+
+- name: Download k3s install script
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: '{{ install_script.path }}'
