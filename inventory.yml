@@ -4,12 +4,12 @@ cluster:
     default_if_name: enp0s3
 
   children:
-    masters:
+    servers:
       hosts:
         ocvm-a1-1:
           # As an example:
           # default_if_name: eth0
 
-    workers:
+    agents:
       hosts:
         ocvm-a1-2:

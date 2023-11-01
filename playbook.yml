@@ -9,15 +9,15 @@
   tasks:
     - import_tasks: tasks/ensure_packages.yml
 
-- name: Update k3s master nodes
-  hosts: masters
+- name: Update k3s server nodes
+  hosts: servers
   gather_facts: false
   serial: 1
   become: true
   tags:
     - all
-    - update-k3s
-    - update-k3s-masters
+    - update
+    - update-servers
   vars:
     unit_name: k3s
     reboot_desired: false
@@ -54,19 +54,19 @@
       vars:
         node_drain_delegate_host: '{{ inventory_hostname }}'
 
-- name: Update k3s workers nodes
-  hosts: workers
+- name: Update k3s agent nodes
+  hosts: agents
   gather_facts: false
   serial: 1
   become: true
   vars:
     unit_name: k3s-agent
     reboot_desired: false
-    first_master_node_name: '{{ groups.masters | first }}'
+    first_server_node_name: '{{ groups.servers | first }}'
   tags:
     - all
-    - update-k3s
-    - update-k3s-workers
+    - update
+    - update-agents
   tasks:
     - import_tasks: tasks/update_system.yml
 
@@ -76,27 +76,27 @@
       register: public_ip_lookup
       community.general.ipify_facts:
 
-    - name: Read first master token
+    - name: Read first server token
       ansible.builtin.slurp:
         src: /var/lib/rancher/k3s/server/token
-      delegate_to: '{{ first_master_node_name }}'
+      delegate_to: '{{ first_server_node_name }}'
       delegate_facts: false
-      register: first_master_token_slurp
+      register: first_server_token_slurp
 
     - name: Execute k3s install script
       vars:
         default_if_ipv4: '{{ ansible_facts[default_if_name].ipv4.address }}'
         public_inet_ipv4: '{{ public_ip_lookup.ansible_facts.ipify_public_ip }}'
 
-        first_master_default_if_name: '{{ hostvars[first_master_node_name].default_if_name }}'
-        first_master_server_ip: '{{ hostvars[first_master_node_name].ansible_facts[first_master_default_if_name].ipv4.address }}'
-        first_master_token: "{{ first_master_token_slurp['content'] | b64decode | trim }}"
+        first_server_default_if_name: '{{ hostvars[first_server_node_name].default_if_name }}'
+        first_server_server_ip: '{{ hostvars[first_server_node_name].ansible_facts[first_server_default_if_name].ipv4.address }}'
+        first_server_token: "{{ first_server_token_slurp['content'] | b64decode | trim }}"
       ansible.builtin.command:
         argv:
           - '{{ install_script.path }}'
           - agent
-          - --server=https://{{ first_master_server_ip }}:6443
-          - --token={{ first_master_token | quote }}
+          - --server=https://{{ first_server_server_ip }}:6443
+          - --token={{ first_server_token | quote }}
           - --flannel-iface={{ default_if_name }}
           - --node-external-ip={{ public_inet_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
@@ -108,4 +108,4 @@
     - include_tasks: tasks/clean_reboot.yml
       when: reboot_required_file.stat.exists or reboot_desired
       vars:
-        node_drain_delegate_host: '{{ first_master_node_name }}'
+        node_drain_delegate_host: '{{ first_server_node_name }}'
