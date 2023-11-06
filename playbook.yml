@@ -22,18 +22,20 @@
     unit_name: k3s
     reboot_desired: false
   tasks:
-    - import_tasks: tasks/update_system.yml
+    - name: Update system packages
+      import_tasks: tasks/update_system.yml
 
-    - include_tasks: tasks/obtain_install_script.yml
+    - name: Obtain install script
+      include_tasks: tasks/obtain_install_script.yml
 
     - name: Get node public IP
       register: public_ip_lookup
-      community.general.ipify_facts:
+      ansible.builtin.command: dig +short -4 myip.opendns.com @resolver1.opendns.com
 
     - name: Execute k3s install script
       vars:
         default_if_ipv4: '{{ ansible_facts[default_if_name].ipv4.address }}'
-        public_inet_ipv4: '{{ public_ip_lookup.ansible_facts.ipify_public_ip }}'
+        public_inet_ipv4: '{{ public_ip_lookup.stdout }}'
         write_kubeconfig_mode: '0644'
       ansible.builtin.command:
         argv:
@@ -45,12 +47,8 @@
           - --advertise-address={{ default_if_ipv4 }}
           - --write-kubeconfig-mode={{ write_kubeconfig_mode }}
 
-    - name: Check if a reboot is needed for Debian and Ubuntu boxes
-      register: reboot_required_file
-      ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
-
-    - include_tasks: tasks/clean_reboot.yml
-      when: reboot_required_file.stat.exists or reboot_desired
+    - name: Post k3s update steps
+      include_tasks: tasks/post_k3s_update.yml
       vars:
         node_drain_delegate_host: '{{ inventory_hostname }}'
 
@@ -68,13 +66,15 @@
     - update
     - update-agents
   tasks:
-    - import_tasks: tasks/update_system.yml
+    - name: Update system packages
+      import_tasks: tasks/update_system.yml
 
-    - include_tasks: tasks/obtain_install_script.yml
+    - name: Obtain install script
+      include_tasks: tasks/obtain_install_script.yml
 
     - name: Get node public IP
       register: public_ip_lookup
-      community.general.ipify_facts:
+      ansible.builtin.command: dig +short -4 myip.opendns.com @resolver1.opendns.com
 
     - name: Read first server token
       ansible.builtin.slurp:
@@ -86,7 +86,7 @@
     - name: Execute k3s install script
       vars:
         default_if_ipv4: '{{ ansible_facts[default_if_name].ipv4.address }}'
-        public_inet_ipv4: '{{ public_ip_lookup.ansible_facts.ipify_public_ip }}'
+        public_inet_ipv4: '{{ public_ip_lookup.stdout }}'
 
         first_server_default_if_name: '{{ hostvars[first_server_node_name].default_if_name }}'
         first_server_server_ip: '{{ hostvars[first_server_node_name].ansible_facts[first_server_default_if_name].ipv4.address }}'
@@ -101,11 +101,7 @@
           - --node-external-ip={{ public_inet_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
 
-    - name: Check if a reboot is needed for Debian and Ubuntu boxes
-      register: reboot_required_file
-      ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
-
-    - include_tasks: tasks/clean_reboot.yml
-      when: reboot_required_file.stat.exists or reboot_desired
+    - name: Post k3s update steps
+      include_tasks: tasks/post_k3s_update.yml
       vars:
         node_drain_delegate_host: '{{ first_server_node_name }}'

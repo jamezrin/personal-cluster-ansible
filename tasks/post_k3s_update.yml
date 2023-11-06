@@ -1,0 +1,15 @@
+---
+- name: 'Restart {{ unit_name }} service'
+  ansible.builtin.systemd:
+    name: '{{ unit_name }}'
+    state: restarted
+
+- name: Check if a reboot is needed for Debian and Ubuntu boxes
+  register: reboot_required_file
+  ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
+
+- name: Clean reboot steps
+  when: reboot_required_file.stat.exists or reboot_desired
+  include_tasks: ./clean_reboot.yml
+  vars:
+    node_drain_delegate_host: '{{ node_drain_delegate_host }}'
