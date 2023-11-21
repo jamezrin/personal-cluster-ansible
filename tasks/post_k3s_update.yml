@@ -11,5 +11,3 @@
 - name: Clean reboot steps
   when: reboot_required_file.stat.exists or reboot_desired
   include_tasks: ./clean_reboot.yml
-  vars:
-    node_drain_delegate_host: '{{ node_drain_delegate_host }}'
