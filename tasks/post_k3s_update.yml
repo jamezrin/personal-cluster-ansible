@@ -6,7 +6,7 @@
 
 - name: Check if a reboot is needed for Debian and Ubuntu boxes
   register: reboot_required_file
-  ansible.builtin.stat: path=/var/run/reboot-required get_md5=no
+  ansible.builtin.stat: path=/var/run/reboot-required get_checksum=no
 
 - name: Clean reboot steps
   when: reboot_required_file.stat.exists or reboot_desired
