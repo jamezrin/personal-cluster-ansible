@@ -1,0 +1,10 @@
+---
+- name: Check storage before pruning
+  include_tasks: check_root_space.yml
+- name: Run crictl rmi --prune
+  ansible.builtin.command: k3s crictl rmi --prune
+  register: output
+- debug: msg="{{ output.stdout }}"
+- name: Check storage after pruning
+  include_tasks: check_root_space.yml
+

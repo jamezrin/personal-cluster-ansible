@@ -8,6 +8,15 @@
     - prepare
   tasks:
     - import_tasks: tasks/ensure_packages.yml
+- name: Prune unused CRI-o images
+  gather_facts: true
+  hosts: cluster
+  become: true
+  tags:
+    - all
+    - prune-images
+  tasks:
+    - import_tasks: tasks/prune_images.yml
 - name: Update k3s server nodes
   hosts: servers
   gather_facts: false

@@ -1,0 +1,6 @@
+---
+- name: Check root storage space
+  vars:
+    root_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/') | first }}"
+  ansible.builtin.debug:
+    msg: "Disk space for {{ root_mount.mount }} is {{ root_mount.size_available | human_readable }}"
