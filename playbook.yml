@@ -17,6 +17,20 @@
     - prune-images
   tasks:
     - import_tasks: tasks/prune_images.yml
+- name: Set public IPs as facts
+  hosts: cluster
+  gather_facts: true
+  tags:
+    - all
+    - update
+    - update-servers
+  tasks:
+    - name: Get node public IP
+      register: public_ip_lookup
+      ansible.builtin.command: dig +short -4 myip.opendns.com @resolver1.opendns.com
+    - ansible.builtin.set_fact:
+        public_ipv4: '{{ public_ip_lookup.stdout }}'
+        cacheable: yes
 - name: Update k3s server nodes
   hosts: servers
   gather_facts: false
@@ -36,14 +50,9 @@
     - name: Obtain install script
       include_tasks: tasks/obtain_install_script.yml
 
-    - name: Get node public IP
-      register: public_ip_lookup
-      ansible.builtin.command: dig +short -4 myip.opendns.com @resolver1.opendns.com
-
     - name: Execute k3s install script
       vars:
         default_if_ipv4: '{{ ansible_facts[default_if_name].ipv4.address }}'
-        public_inet_ipv4: '{{ public_ip_lookup.stdout }}'
         write_kubeconfig_mode: '0644'
       environment:
         INSTALL_K3S_CHANNEL: 'latest'
@@ -52,7 +61,7 @@
           - '{{ install_script.path }}'
           - server
           - --flannel-iface={{ default_if_name }}
-          - --node-external-ip={{ public_inet_ipv4 }}
+          - --node-external-ip={{ public_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
           - --advertise-address={{ default_if_ipv4 }}
           - --write-kubeconfig-mode={{ write_kubeconfig_mode }}
@@ -83,10 +92,6 @@
     - name: Obtain install script
       include_tasks: tasks/obtain_install_script.yml
 
-    - name: Get node public IP
-      register: public_ip_lookup
-      ansible.builtin.command: dig +short -4 myip.opendns.com @resolver1.opendns.com
-
     - name: Read first server token
       ansible.builtin.slurp:
         src: /var/lib/rancher/k3s/server/token
@@ -97,7 +102,6 @@
     - name: Execute k3s install script
       vars:
         default_if_ipv4: '{{ ansible_facts[default_if_name].ipv4.address }}'
-        public_inet_ipv4: '{{ public_ip_lookup.stdout }}'
 
         first_server_default_if_name: '{{ hostvars[first_server_node_name].default_if_name }}'
         first_server_server_ip: '{{ hostvars[first_server_node_name].ansible_facts[first_server_default_if_name].ipv4.address }}'
@@ -111,7 +115,7 @@
           - --server=https://{{ first_server_server_ip }}:6443
           - --token={{ first_server_token | quote }}
           - --flannel-iface={{ default_if_name }}
-          - --node-external-ip={{ public_inet_ipv4 }}
+          - --node-external-ip={{ public_ipv4 }}
           - --node-ip={{ default_if_ipv4 }}
 
     - name: Post k3s update steps
