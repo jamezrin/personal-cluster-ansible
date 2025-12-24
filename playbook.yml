@@ -4,7 +4,6 @@
   hosts: cluster
   become: true
   tags:
-    - all
     - prepare
   tasks:
     - import_tasks: tasks/ensure_packages.yml
@@ -13,7 +12,6 @@
   hosts: cluster
   become: true
   tags:
-    - all
     - prune-images
   tasks:
     - import_tasks: tasks/prune_images.yml
@@ -21,7 +19,6 @@
   hosts: cluster
   gather_facts: true
   tags:
-    - all
     - update
     - update-servers
   tasks:
@@ -37,7 +34,6 @@
   serial: 1
   become: true
   tags:
-    - all
     - update
     - update-servers
   vars:
@@ -82,7 +78,6 @@
     reboot_desired: false
     first_server_node_name: '{{ groups.servers | first }}'
   tags:
-    - all
     - update
     - update-agents
   tasks:

@@ -9,5 +9,5 @@
   ansible.builtin.stat: path=/var/run/reboot-required get_checksum=no
 
 - name: Clean reboot steps
-  when: reboot_required_file.stat.exists or reboot_desired
+  when: reboot_required_file.stat.exists or (reboot_desired | default(false) | bool)
   include_tasks: ./clean_reboot.yml
